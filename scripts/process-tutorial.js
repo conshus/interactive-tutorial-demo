@@ -157,7 +157,7 @@ async function generateDevContainer(name, config) {
     
     if (config.panels && config.panels.includes('browser')) {
         // live-server provides hot reload for the user's index.html
-        attachCommand += " nohup npx live-server. --port=8080 --no-browser > /dev/null 2>&1 &";
+        attachCommand += " nohup npx live-server --port=8080 --no-browser > /dev/null 2>&1 &";
     }
 
     // -- The DevContainer Configuration Object --
@@ -183,6 +183,9 @@ async function generateDevContainer(name, config) {
                     "liveServer.settings.root": "/",
                     "editor.formatOnSave": true
                 }
+            },
+            "codespaces": {
+                "openFiles": config.files || []
             }
         },
         

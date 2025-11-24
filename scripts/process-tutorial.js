@@ -73,7 +73,7 @@ async function main() {
     if (tutorialConfig.panels && tutorialConfig.panels.includes('browser')) {
         // We add the public port command here inside the package.json script
         // Note: We use 'wait' at the end to keep the process alive
-        startCommand += " gh codespace ports visibility 8080:public -c $CODESPACE_NAME && live-server --port=8080 --no-browser & wait";
+        startCommand += " live-server --port=8080 --no-browser & wait";
     } else {
         startCommand += " wait";
     }
@@ -171,7 +171,8 @@ async function generateDevContainer(name, config) {
     if (config.panels && config.panels.includes('browser')) {
         portsAttributes["8080"] = {
             "label": "My Project Preview",
-            "onAutoForward": "notify"
+            "onAutoForward": "notify",
+            "visibility": "public"
         };
     }
 

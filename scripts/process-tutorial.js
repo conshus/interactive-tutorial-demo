@@ -250,7 +250,7 @@ async function generateDevContainer(name, config) {
         "postCreateCommand": "",
         
         // Run every time the user connects/attaches
-        "postAttachCommand": "",
+        "postAttachCommand": "npm start",
 
         "features": {},
         

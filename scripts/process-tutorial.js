@@ -126,6 +126,10 @@ async function main() {
         });
     }
 
+    // 5b. Generate tasks.json
+    // This creates the VS Code task to run 'npm start' automatically
+    generateTasksJson(targetDir);
+    
     // 6. Generate Dynamic devcontainer.json
     await generateDevContainer(tutorialName, tutorialConfig);
 
@@ -152,6 +156,48 @@ Click the button below to launch a configured Codespace for this tutorial.
     // 8. Cleanup
     fs.removeSync(path.join(UPLOADS_DIR, zipFilename));
     console.log("🧹 Cleanup complete. Zip file removed.");
+}
+
+function generateTasksJson(targetDir) {
+    const vscodeDir = path.join(targetDir, '.vscode');
+    fs.ensureDirSync(vscodeDir);
+
+    const tasksConfig = {
+        "version": "2.0.0",
+        "tasks": [
+            {
+                "label": "Start Tutorial Environment",
+                "type": "npm",
+                "script": "start", // Runs the 'npm start' script we injected earlier
+                "isBackground": true, // Keeps it running in background but visible in terminal
+                "problemMatcher": {
+                    "owner": "custom",
+                    "pattern": {
+                        "regexp": "^$"
+                    },
+                    "background": {
+                        "activeOnStart": true,
+                        "beginsPattern": "Starting up",
+                        "endsPattern": "Available on"
+                    }
+                },
+                "presentation": {
+                    "reveal": "always",
+                    "panel": "dedicated",
+                    "group": "terminals"
+                },
+                "runOptions": {
+                    "runOn": "folderOpen" // This makes it start automatically!
+                }
+            }
+        ]
+    };
+
+    fs.writeFileSync(
+        path.join(vscodeDir, 'tasks.json'),
+        JSON.stringify(tasksConfig, null, 4)
+    );
+    console.log("✅ Generated .vscode/tasks.json");
 }
 
 async function generateDevContainer(name, config) {
@@ -204,7 +250,7 @@ async function generateDevContainer(name, config) {
         "postCreateCommand": "",
         
         // Run every time the user connects/attaches
-        "postAttachCommand": "npm start",
+        "postAttachCommand": "",
 
         "features": {},
         

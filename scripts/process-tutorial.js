@@ -78,7 +78,7 @@ async function main() {
         // 3. Print the clickable URL using the $CODESPACE_NAME variable
         // Note: We escape the $ so it is written literally into package.json
         const linkMsg = "echo \"\\n\\n--------------------------------------------------\\nYOUR APP IS READY:\\nhttps://\${CODESPACE_NAME}-8080.app.github.dev\\n--------------------------------------------------\\n\\n\"";
-        startCommand += ` sleep 3 && ${linkMsg} & wait`;
+        startCommand += ` sleep 15 && ${linkMsg} & wait`;
     } else {
         startCommand += " wait";
     }

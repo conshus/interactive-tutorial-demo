@@ -227,6 +227,41 @@ async function generateDevContainer(name, config) {
         };
     }
 
+    // --- SMART FILE EXCLUSION LOGIC ---
+    // 1. List of files we generally want to hide in a tutorial
+    const defaultHidden = [
+        ".astro",
+        "public",
+        "node_modules",
+        "vonage-toolbar",
+        "src",
+        "dist",
+        "steps",            // Hides the static site folder
+        ".devcontainer",    // Hides the config folder
+        ".vscode",
+        "package.json",
+        "package-lock.json",
+        "tutorial-config.json",
+        "tsconfig.json",
+        "astro.config.mjs",
+        ".git",
+        "README.md",
+        "markdoc.config.mjs",
+        ".DS_Store"
+    ];
+
+    // 2. Build the files.exclude object
+    const filesExclude = {};
+    const userFiles = config.files || [];
+
+    defaultHidden.forEach(file => {
+        // Only hide the file if the user didn't explicitly ask for it in the config
+        if (!userFiles.includes(file)) {
+            filesExclude[file] = true;
+        }
+    });
+    // ----------------------------------------
+    
     // -- Startup Commands --
     // 1. Serve the 'steps' folder (static site) on port 3000
     // 2. Serve the current directory on port 8080 (if browser requested)
@@ -263,7 +298,8 @@ async function generateDevContainer(name, config) {
             "vscode": {
                 "extensions": [],
                 "settings": {
-                    "editor.formatOnSave": true
+                    "editor.formatOnSave": true,
+                    "files.exclude": filesExclude
                 }
             },
             "codespaces": {

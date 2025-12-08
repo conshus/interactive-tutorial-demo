@@ -64,12 +64,43 @@ async function main() {
     }
     const tutorialConfig = fs.readJsonSync(configPath);
 
+    // --- NEW: 3b. CLONE EXTERNAL REPOSITORY ---
+    if (tutorialConfig.repository) {
+        console.log(`🌐 Cloning external source: ${tutorialConfig.repository}`);
+        const tempDir = path.join(__dirname, '../temp_clone');
+        
+        // Clean temp dir
+        if (fs.existsSync(tempDir)) fs.removeSync(tempDir);
+        fs.ensureDirSync(tempDir);
+
+        try {
+            // Clone to temp folder
+            execSync(`git clone ${tutorialConfig.repository} .`, { cwd: tempDir, stdio: 'inherit' });
+            
+            // Remove .git folder so it becomes just a pile of files, not a sub-repo
+            fs.removeSync(path.join(tempDir, '.git'));
+            
+            // Copy files to targetDir, but DO NOT overwrite existing files 
+            // (Preserves your tutorial-config.json and steps folder)
+            fs.copySync(tempDir, targetDir, { overwrite: false });
+            
+            console.log("✅ External code merged into tutorial folder.");
+        } catch (err) {
+            console.error("❌ Failed to clone external repository:", err);
+            // We don't exit here, in case the zip has enough content to run anyway
+        } finally {
+            fs.removeSync(tempDir);
+        }
+    }    
+
+    // --- INJECT DEPENDENCIES & START SCRIPT ---
     // We add http-server and live-server to package.json here.
     // This allows 'npm install' to handle them efficiently in the container.
     const packageJsonPath = path.join(targetDir, 'package.json');
 
     // We construct the start command based on whether the browser panel is needed
-    let startCommand = "http-server steps -p 3000 --cors -c-1 > /dev/null 2>&1 &";
+    // let startCommand = "http-server steps -p 3000 --cors -c-1 > /dev/null 2>&1 &";
+    let startCommand = "http-server steps -p 1234 --cors -c-1 > /dev/null 2>&1 &";
     if (tutorialConfig.panels && tutorialConfig.panels.includes('browser')) {
         // We add the public port command here inside the package.json script
         // Note: We use 'wait' at the end to keep the process alive
@@ -153,7 +184,7 @@ Click the button below to launch a configured Codespace for this tutorial.
 [![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](${deepLink})
 
 ### Environment Details
-- **Tutorial Steps**: Available in the preview pane (Port 3000).
+- **Tutorial Steps**: Available in the preview pane (Port 1234).
 - **Your Workspace**: Located in \`tutorials/${tutorialName}\`.
     `;
     fs.writeFileSync(path.join(targetDir, 'README.md'), readmeContent);
@@ -209,10 +240,28 @@ async function generateDevContainer(name, config) {
     const devContainerDir = path.join(DEVCONTAINER_BASE, name);
     fs.ensureDirSync(devContainerDir);
 
+    // Calculate where the tutorial files actually live
+    const targetDir = path.join(TUTORIALS_BASE, name);
+
+    // --- SMART STARTUP LOGIC ---
+    // Check if setup-tutorial.js exists and has content
+    let postAttachCommand = "npm start";
+    const setupFile = path.join(targetDir, "setup-tutorial.js");
+
+    if (fs.existsSync(setupFile)) {
+        const content = fs.readFileSync(setupFile, 'utf8').trim();
+        // If file exists and is not empty, assume manual setup is required.
+        // We set command to empty string so user enters terminal manually.
+        if (content.length > 0) {
+            console.log("ℹ️  Setup script detected. Disabling auto-start.");
+            postAttachCommand = ""; 
+        }
+    }
+
     // -- Port & Preview Configuration --
-    // Port 3000: The Starlight Tutorial Steps
+    // Port 1234: The Starlight Tutorial Steps
     const portsAttributes = {
-        "3000": {
+        "1234": {
             "label": "Tutorial Guide",
             "onAutoForward": "openPreview"
         }
@@ -242,6 +291,7 @@ async function generateDevContainer(name, config) {
         "package.json",
         "package-lock.json",
         "tutorial-config.json",
+        "setup-tutorial.js",
         "tsconfig.json",
         "astro.config.mjs",
         ".git",
@@ -290,9 +340,11 @@ async function generateDevContainer(name, config) {
         "postCreateCommand": "",
         
         // Run every time the user connects/attaches
-        "postAttachCommand": "npm start",
+        "postAttachCommand": postAttachCommand,
 
-        "features": {},
+        "features": {
+            "ghcr.io/devcontainers/features/github-cli:1": {}
+        },
         
         "customizations": {
             "vscode": {

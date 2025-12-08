@@ -79,6 +79,9 @@ async function main() {
             
             // Remove .git folder so it becomes just a pile of files, not a sub-repo
             fs.removeSync(path.join(tempDir, '.git'));
+
+            // MERGE LOGIC: Merge external package.json into the target (Astro) package.json
+            mergePackageJsons(targetDir, tempDir);
             
             // Copy files to targetDir, but DO NOT overwrite existing files 
             // (Preserves your tutorial-config.json and steps folder)
@@ -100,11 +103,33 @@ async function main() {
 
     // We construct the start command based on whether the browser panel is needed
     // let startCommand = "http-server steps -p 3000 --cors -c-1 > /dev/null 2>&1 &";
+
+    // Alaways start the tutorial steps server
     let startCommand = "http-server steps -p 1234 --cors -c-1 > /dev/null 2>&1 &";
+
+    // Read package.json to see if we have an external app
+    let hasExternalApp = false;
+    if (fs.existsSync(packageJsonPath)) {
+        const pkg = fs.readJsonSync(packageJsonPath);
+        if (pkg.scripts && pkg.scripts["app:start"]) {
+            hasExternalApp = true;
+        }
+    }
+
+    // Run External App (If it exists, regardless of panels config)
+    if (hasExternalApp) {
+        console.log("⚡ Detected external application. Wiring up 'app:start'...");
+        startCommand += " npm run app:start &";
+    }
+
+    // Handle Browser Panel Logic
     if (tutorialConfig.panels && tutorialConfig.panels.includes('browser')) {
         // We add the public port command here inside the package.json script
         // Note: We use 'wait' at the end to keep the process alive
-        startCommand += " live-server --port=8080 --no-browser > /dev/null 2>&1 &";
+        // If the user wants a browser but DOESN'T have an app, fallback to live-server
+        // if (!hasExternalApp) {
+            startCommand += " live-server --port=8080 --no-browser > /dev/null 2>&1 &";
+        // }
         // 2. Add a 'sleep' so this message prints AFTER the server startup logs
         // 3. Print the clickable URL using the $CODESPACE_NAME variable
         // Note: We escape the $ so it is written literally into package.json
@@ -192,6 +217,53 @@ Click the button below to launch a configured Codespace for this tutorial.
     // 8. Cleanup
     fs.removeSync(path.join(UPLOADS_DIR, zipFilename));
     console.log("🧹 Cleanup complete. Zip file removed.");
+}
+
+// --- MERGE PACKAGE.JSONs ---
+function mergePackageJsons(targetDir, externalDir) {
+    const targetPkgPath = path.join(targetDir, 'package.json');
+    const externalPkgPath = path.join(externalDir, 'package.json');
+
+    if (!fs.existsSync(targetPkgPath) || !fs.existsSync(externalPkgPath)) {
+        return; // Nothing to merge
+    }
+
+    const targetPkg = fs.readJsonSync(targetPkgPath);
+    const externalPkg = fs.readJsonSync(externalPkgPath);
+
+    console.log("📦 Merging external package.json...");
+
+    // 1. Merge Dependencies (External takes precedence if versions conflict)
+    targetPkg.dependencies = {
+        ...targetPkg.dependencies,
+        ...externalPkg.dependencies
+    };
+    
+    targetPkg.devDependencies = {
+        ...targetPkg.devDependencies,
+        ...externalPkg.devDependencies
+    };
+
+    // 2. Merge Scripts
+    // If the external repo has a 'start' script, rename it to 'app:start'
+    // so we can trigger it from our main start script later.
+    if (externalPkg.scripts && externalPkg.scripts.start) {
+        targetPkg.scripts = targetPkg.scripts || {};
+        targetPkg.scripts["app:start"] = externalPkg.scripts.start;
+        console.log(`   👉 Renamed external 'start' to 'app:start': ${externalPkg.scripts.start}`);
+    }
+
+    // Merge other scripts (excluding 'start' to avoid overwriting Astro's start temporarily)
+    if (externalPkg.scripts) {
+        for (const [key, cmd] of Object.entries(externalPkg.scripts)) {
+            if (key !== 'start') {
+                targetPkg.scripts[key] = cmd;
+            }
+        }
+    }
+
+    // 3. Write merged file
+    fs.writeJsonSync(targetPkgPath, targetPkg, { spaces: 2 });
 }
 
 function generateTasksJson(targetDir) {

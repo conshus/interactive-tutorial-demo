@@ -64,7 +64,13 @@ async function main() {
     }
     const tutorialConfig = fs.readJsonSync(configPath);
 
-    // --- NEW: 3b. CLONE EXTERNAL REPOSITORY ---
+    // --- 3b. CLONE EXTERNAL REPOSITORY into project subfolder ---
+    const projectDir = path.join(targetDir, 'project');
+    let hasExternalApp = false;
+
+    // Ensure project dir exists even if we don't clone (for setup script destination)
+    fs.ensureDirSync(projectDir);
+
     if (tutorialConfig.repository) {
         console.log(`🌐 Cloning external source: ${tutorialConfig.repository}`);
         const tempDir = path.join(__dirname, '../temp_clone');
@@ -81,13 +87,14 @@ async function main() {
             fs.removeSync(path.join(tempDir, '.git'));
 
             // MERGE LOGIC: Merge external package.json into the target (Astro) package.json
-            mergePackageJsons(targetDir, tempDir);
+            // mergePackageJsons(targetDir, tempDir);
             
             // Copy files to targetDir, but DO NOT overwrite existing files 
             // (Preserves your tutorial-config.json and steps folder)
-            fs.copySync(tempDir, targetDir, { overwrite: false });
+            fs.copySync(tempDir, projectDir, { overwrite: false });
             
-            console.log("✅ External code merged into tutorial folder.");
+            console.log("✅ External code cloned into /project subfolder.");
+            hasExternalApp = true;
         } catch (err) {
             console.error("❌ Failed to clone external repository:", err);
             // We don't exit here, in case the zip has enough content to run anyway
@@ -96,61 +103,105 @@ async function main() {
         }
     }    
 
-    // --- INJECT DEPENDENCIES & START SCRIPT ---
-    // We add http-server and live-server to package.json here.
-    // This allows 'npm install' to handle them efficiently in the container.
-    const packageJsonPath = path.join(targetDir, 'package.json');
+    // --- NEW: SETUP SCRIPT MIGRATION ---
+    // Check for setup-tutorial.js OR setup-project.js in root and move to project/setup-project.js
+    const legacySetup = path.join(targetDir, 'setup-tutorial.js');
+    const newSetup = path.join(targetDir, 'setup-project.js');
+    const destSetup = path.join(projectDir, 'setup-project.js');
+    let hasSetupScript = false;
 
-    // We construct the start command based on whether the browser panel is needed
-    // let startCommand = "http-server steps -p 3000 --cors -c-1 > /dev/null 2>&1 &";
-
-    // Alaways start the tutorial steps server
-    let startCommand = "http-server steps -p 1234 --cors -c-1 > /dev/null 2>&1 &";
-
-    // Read package.json to see if we have an external app
-    let hasExternalApp = false;
-    if (fs.existsSync(packageJsonPath)) {
-        const pkg = fs.readJsonSync(packageJsonPath);
-        if (pkg.scripts && pkg.scripts["app:start"]) {
-            hasExternalApp = true;
-        }
+    if (fs.existsSync(legacySetup)) {
+        fs.moveSync(legacySetup, destSetup, { overwrite: true });
+        hasSetupScript = true;
+        console.log("📦 Moved setup-tutorial.js -> project/setup-project.js");
+    } else if (fs.existsSync(newSetup)) {
+        fs.moveSync(newSetup, destSetup, { overwrite: true });
+        hasSetupScript = true;
+        console.log("📦 Moved setup-project.js -> project/setup-project.js");
     }
 
-    // Run External App (If it exists, regardless of panels config)
-    if (hasExternalApp) {
-        console.log("⚡ Detected external application. Wiring up 'app:start'...");
-        startCommand += " npm run app:start &";
-    }
-
-    // Handle Browser Panel Logic
-    if (tutorialConfig.panels && tutorialConfig.panels.includes('browser')) {
-        // We add the public port command here inside the package.json script
-        // Note: We use 'wait' at the end to keep the process alive
-        // If the user wants a browser but DOESN'T have an app, fallback to live-server
-        // if (!hasExternalApp) {
-            startCommand += " live-server --port=8080 --no-browser > /dev/null 2>&1 &";
-        // }
-        // 2. Add a 'sleep' so this message prints AFTER the server startup logs
-        // 3. Print the clickable URL using the $CODESPACE_NAME variable
-        // Note: We escape the $ so it is written literally into package.json
-        const linkMsg = "echo \"\\n\\n--------------------------------------------------\\nYOUR APP IS READY:\\nhttps://\${CODESPACE_NAME}-8080.app.github.dev\\n--------------------------------------------------\\n\\n\"";
-        startCommand += ` sleep 15 && ${linkMsg} & wait`;
-    } else {
-        startCommand += " wait";
-    }
+    // --- CONFIGURE ROOT PACKAGE.JSON ---
+    const rootPackageJson = path.join(targetDir, 'package.json');
     
-    if (fs.existsSync(packageJsonPath)) {
-        const pkg = fs.readJsonSync(packageJsonPath);
+    if (fs.existsSync(rootPackageJson)) {
+        const pkg = fs.readJsonSync(rootPackageJson);
+        
         pkg.devDependencies = pkg.devDependencies || {};
         pkg.devDependencies["http-server"] = "^14.1.1";
-        pkg.devDependencies["live-server"] = "^1.2.2";
-
-        pkg.scripts = pkg.scripts || {};
-        pkg.scripts["start"] = startCommand;
+        // We add live-server as a fallback for pure frontend tutorials
+        if (tutorialConfig.panels && tutorialConfig.panels.includes('browser') && !hasExternalApp) {
+             pkg.devDependencies["live-server"] = "^1.2.2";
+        }
         
-        fs.writeJsonSync(packageJsonPath, pkg, { spaces: 2 });
-        console.log("📦 Injected dev dependencies into package.json");
+        pkg.scripts = pkg.scripts || {};
+        
+        // 1. The Tutorial Server Script (Runs in background)
+        pkg.scripts["start:tutorial"] = "http-server steps -p 3000 --cors -c-1";
+        
+        // 2. The Post-Install Script (Installs project deps)
+        if (hasExternalApp) {
+            pkg.scripts["postinstall"] = "cd project && npm install";
+        }
+
+        fs.writeJsonSync(rootPackageJson, pkg, { spaces: 2 });
+        console.log("📦 Root package.json configured.");
     }
+
+    // // --- INJECT DEPENDENCIES & START SCRIPT ---
+    // // We add http-server and live-server to package.json here.
+    // // This allows 'npm install' to handle them efficiently in the container.
+    // const packageJsonPath = path.join(targetDir, 'package.json');
+
+    // // We construct the start command based on whether the browser panel is needed
+    // // let startCommand = "http-server steps -p 3000 --cors -c-1 > /dev/null 2>&1 &";
+
+    // // Alaways start the tutorial steps server
+    // let startCommand = "http-server steps -p 1234 --cors -c-1 > /dev/null 2>&1 &";
+
+    // // Read package.json to see if we have an external app
+    // let hasExternalApp = false;
+    // if (fs.existsSync(packageJsonPath)) {
+    //     const pkg = fs.readJsonSync(packageJsonPath);
+    //     if (pkg.scripts && pkg.scripts["app:start"]) {
+    //         hasExternalApp = true;
+    //     }
+    // }
+
+    // // Run External App (If it exists, regardless of panels config)
+    // if (hasExternalApp) {
+    //     console.log("⚡ Detected external application. Wiring up 'app:start'...");
+    //     startCommand += " npm run app:start &";
+    // }
+
+    // // Handle Browser Panel Logic
+    // if (tutorialConfig.panels && tutorialConfig.panels.includes('browser')) {
+    //     // We add the public port command here inside the package.json script
+    //     // Note: We use 'wait' at the end to keep the process alive
+    //     // If the user wants a browser but DOESN'T have an app, fallback to live-server
+    //     // if (!hasExternalApp) {
+    //         startCommand += " live-server --port=8080 --no-browser > /dev/null 2>&1 &";
+    //     // }
+    //     // 2. Add a 'sleep' so this message prints AFTER the server startup logs
+    //     // 3. Print the clickable URL using the $CODESPACE_NAME variable
+    //     // Note: We escape the $ so it is written literally into package.json
+    //     const linkMsg = "echo \"\\n\\n--------------------------------------------------\\nYOUR APP IS READY:\\nhttps://\${CODESPACE_NAME}-8080.app.github.dev\\n--------------------------------------------------\\n\\n\"";
+    //     startCommand += ` sleep 15 && ${linkMsg} & wait`;
+    // } else {
+    //     startCommand += " wait";
+    // }
+    
+    // if (fs.existsSync(packageJsonPath)) {
+    //     const pkg = fs.readJsonSync(packageJsonPath);
+    //     pkg.devDependencies = pkg.devDependencies || {};
+    //     pkg.devDependencies["http-server"] = "^14.1.1";
+    //     pkg.devDependencies["live-server"] = "^1.2.2";
+
+    //     pkg.scripts = pkg.scripts || {};
+    //     pkg.scripts["start"] = startCommand;
+        
+    //     fs.writeJsonSync(packageJsonPath, pkg, { spaces: 2 });
+    //     console.log("📦 Injected dev dependencies into package.json");
+    // }
 
     // 4. Build Astro Starlight Project
     console.log("🔨 Building Astro Starlight project...");
@@ -189,10 +240,11 @@ async function main() {
 
     // 5b. Generate tasks.json
     // This creates the VS Code task to run 'npm start' automatically
-    generateTasksJson(targetDir);
+    // generateTasksJson(targetDir);
     
     // 6. Generate Dynamic devcontainer.json
-    await generateDevContainer(tutorialName, tutorialConfig);
+    // await generateDevContainer(tutorialName, tutorialConfig);
+    await generateDevContainer(tutorialName, tutorialConfig, hasExternalApp, hasSetupScript);
 
     // 7. Generate README with Launch Button
     // This deep link points to the specific devcontainer configuration folder
@@ -211,6 +263,7 @@ Click the button below to launch a configured Codespace for this tutorial.
 ### Environment Details
 - **Tutorial Steps**: Available in the preview pane (Port 1234).
 - **Your Workspace**: Located in \`tutorials/${tutorialName}\`.
+- **Project Code**: Located in \`tutorials/${tutorialName}/project\`.
     `;
     fs.writeFileSync(path.join(targetDir, 'README.md'), readmeContent);
 
@@ -219,52 +272,52 @@ Click the button below to launch a configured Codespace for this tutorial.
     console.log("🧹 Cleanup complete. Zip file removed.");
 }
 
-// --- MERGE PACKAGE.JSONs ---
-function mergePackageJsons(targetDir, externalDir) {
-    const targetPkgPath = path.join(targetDir, 'package.json');
-    const externalPkgPath = path.join(externalDir, 'package.json');
+// // --- MERGE PACKAGE.JSONs ---
+// function mergePackageJsons(targetDir, externalDir) {
+//     const targetPkgPath = path.join(targetDir, 'package.json');
+//     const externalPkgPath = path.join(externalDir, 'package.json');
 
-    if (!fs.existsSync(targetPkgPath) || !fs.existsSync(externalPkgPath)) {
-        return; // Nothing to merge
-    }
+//     if (!fs.existsSync(targetPkgPath) || !fs.existsSync(externalPkgPath)) {
+//         return; // Nothing to merge
+//     }
 
-    const targetPkg = fs.readJsonSync(targetPkgPath);
-    const externalPkg = fs.readJsonSync(externalPkgPath);
+//     const targetPkg = fs.readJsonSync(targetPkgPath);
+//     const externalPkg = fs.readJsonSync(externalPkgPath);
 
-    console.log("📦 Merging external package.json...");
+//     console.log("📦 Merging external package.json...");
 
-    // 1. Merge Dependencies (External takes precedence if versions conflict)
-    targetPkg.dependencies = {
-        ...targetPkg.dependencies,
-        ...externalPkg.dependencies
-    };
+//     // 1. Merge Dependencies (External takes precedence if versions conflict)
+//     targetPkg.dependencies = {
+//         ...targetPkg.dependencies,
+//         ...externalPkg.dependencies
+//     };
     
-    targetPkg.devDependencies = {
-        ...targetPkg.devDependencies,
-        ...externalPkg.devDependencies
-    };
+//     targetPkg.devDependencies = {
+//         ...targetPkg.devDependencies,
+//         ...externalPkg.devDependencies
+//     };
 
-    // 2. Merge Scripts
-    // If the external repo has a 'start' script, rename it to 'app:start'
-    // so we can trigger it from our main start script later.
-    if (externalPkg.scripts && externalPkg.scripts.start) {
-        targetPkg.scripts = targetPkg.scripts || {};
-        targetPkg.scripts["app:start"] = externalPkg.scripts.start;
-        console.log(`   👉 Renamed external 'start' to 'app:start': ${externalPkg.scripts.start}`);
-    }
+//     // 2. Merge Scripts
+//     // If the external repo has a 'start' script, rename it to 'app:start'
+//     // so we can trigger it from our main start script later.
+//     if (externalPkg.scripts && externalPkg.scripts.start) {
+//         targetPkg.scripts = targetPkg.scripts || {};
+//         targetPkg.scripts["app:start"] = externalPkg.scripts.start;
+//         console.log(`   👉 Renamed external 'start' to 'app:start': ${externalPkg.scripts.start}`);
+//     }
 
-    // Merge other scripts (excluding 'start' to avoid overwriting Astro's start temporarily)
-    if (externalPkg.scripts) {
-        for (const [key, cmd] of Object.entries(externalPkg.scripts)) {
-            if (key !== 'start') {
-                targetPkg.scripts[key] = cmd;
-            }
-        }
-    }
+//     // Merge other scripts (excluding 'start' to avoid overwriting Astro's start temporarily)
+//     if (externalPkg.scripts) {
+//         for (const [key, cmd] of Object.entries(externalPkg.scripts)) {
+//             if (key !== 'start') {
+//                 targetPkg.scripts[key] = cmd;
+//             }
+//         }
+//     }
 
-    // 3. Write merged file
-    fs.writeJsonSync(targetPkgPath, targetPkg, { spaces: 2 });
-}
+//     // 3. Write merged file
+//     fs.writeJsonSync(targetPkgPath, targetPkg, { spaces: 2 });
+// }
 
 function generateTasksJson(targetDir) {
     const vscodeDir = path.join(targetDir, '.vscode');
@@ -308,38 +361,45 @@ function generateTasksJson(targetDir) {
     console.log("✅ Generated .vscode/tasks.json");
 }
 
-async function generateDevContainer(name, config) {
+
+async function generateDevContainer(name, config, hasExternalApp, hasSetupScript) {
     const devContainerDir = path.join(DEVCONTAINER_BASE, name);
     fs.ensureDirSync(devContainerDir);
 
-    // Calculate where the tutorial files actually live
-    const targetDir = path.join(TUTORIALS_BASE, name);
+    // --- CONSTRUCT THE DAISY CHAIN COMMAND ---
+    // 1. Start Tutorial Server (Backgrounded & Silenced)
+    // We run this from root because 'steps' is in root.
+    let commandChain = "nohup npm run start:tutorial > /dev/null 2>&1 & ";
 
-    // --- SMART STARTUP LOGIC ---
-    // Check if setup-tutorial.js exists and has content
-    let postAttachCommand = "npm start";
-    const setupFile = path.join(targetDir, "setup-tutorial.js");
-
-    if (fs.existsSync(setupFile)) {
-        const content = fs.readFileSync(setupFile, 'utf8').trim();
-        // If file exists and is not empty, assume manual setup is required.
-        // We set command to empty string so user enters terminal manually.
-        if (content.length > 0) {
-            console.log("ℹ️  Setup script detected. Disabling auto-start.");
-            postAttachCommand = ""; 
-        }
+    // 2. Setup Script (Interactive)
+    if (hasSetupScript) {
+        // We echo a blank line to separate output from the prompt
+        commandChain += "echo '' && cd project && node setup-project.js && ";
+    } else if (hasExternalApp) {
+        // If no setup script but we need to run app, we still need to cd
+        commandChain += "cd project && ";
     }
 
-    // -- Port & Preview Configuration --
-    // Port 1234: The Starlight Tutorial Steps
-    const portsAttributes = {
-        "1234": {
-            "label": "Tutorial Guide",
-            "onAutoForward": "openPreview"
+    // 3. Start Application
+    if (hasExternalApp) {
+        // Run the project's start script
+        commandChain += "npm start";
+    } else if (config.panels && config.panels.includes('browser')) {
+        // Fallback: If no external app but browser requested, run live-server (from root)
+        // Note: We need to be careful with 'cd' above. 
+        // If we didn't cd into project, we run this from root.
+        if (!hasSetupScript) {
+             commandChain += "live-server --port=8080 --no-browser > /dev/null 2>&1 & wait";
         }
+    } else {
+        // If nothing else to run, just wait to keep container alive
+        commandChain += "wait";
+    }
+
+    const portsAttributes = {
+        "3000": { "label": "Tutorial Guide", "onAutoForward": "openPreview" }
     };
 
-    // Port 8080: The User's Live Preview (if 'browser' panel requested)
     if (config.panels && config.panels.includes('browser')) {
         portsAttributes["8080"] = {
             "label": "My Project Preview",
@@ -349,73 +409,45 @@ async function generateDevContainer(name, config) {
     }
 
     // --- SMART FILE EXCLUSION LOGIC ---
-    // 1. List of files we generally want to hide in a tutorial
     const defaultHidden = [
-        ".astro",
-        "public",
         "node_modules",
-        "vonage-toolbar",
-        "src",
         "dist",
-        "steps",            // Hides the static site folder
-        ".devcontainer",    // Hides the config folder
+        "steps",
+        ".devcontainer",
         ".vscode",
         "package.json",
         "package-lock.json",
         "tutorial-config.json",
-        "setup-tutorial.js",
         "tsconfig.json",
         "astro.config.mjs",
         ".git",
-        "README.md",
-        "markdoc.config.mjs",
-        ".DS_Store"
+        ".DS_Store",
+        "project/setup-project.js" // Hide the moved setup script
     ];
 
-    // 2. Build the files.exclude object
     const filesExclude = {};
     const userFiles = config.files || [];
 
     defaultHidden.forEach(file => {
-        // Only hide the file if the user didn't explicitly ask for it in the config
         if (!userFiles.includes(file)) {
             filesExclude[file] = true;
         }
     });
-    // ----------------------------------------
-    
-    // -- Startup Commands --
-    // 1. Serve the 'steps' folder (static site) on port 3000
-    // 2. Serve the current directory on port 8080 (if browser requested)
-    // We use 'concurrently' or simple background '&' operators.
-    
-    // let attachCommand = "nohup npx http-server steps -p 3000 --cors -c-1 > /dev/null 2>&1 &";
-    
-    // if (config.panels && config.panels.includes('browser')) {
-    //     // live-server provides hot reload for the user's index.html
-    //     attachCommand += " nohup npx live-server --port=8080 --no-browser > /dev/null 2>&1 &";
-    // }
 
-    // -- The DevContainer Configuration Object --
     const devContainerConfig = {
         "name": `Tutorial: ${name}`,
         "image": "mcr.microsoft.com/devcontainers/javascript-node:1-22-bookworm",
-        
-        // Isolate the user in the specific tutorial folder
         "workspaceFolder": `/workspaces/${REPO_NAME}/tutorials/${name}`,
-
+        
         "waitFor": "onCreateCommand",
-
         "updateContentCommand": "npm install",
-
-        // Run once when the container is created
         "postCreateCommand": "",
         
-        // Run every time the user connects/attaches
-        "postAttachCommand": postAttachCommand,
+        // THE MAGIC CHAIN
+        "postAttachCommand": commandChain, 
 
         "features": {
-            "ghcr.io/devcontainers/features/github-cli:1": {}
+             "ghcr.io/devcontainers/features/github-cli:1": {}
         },
         
         "customizations": {
@@ -427,25 +459,158 @@ async function generateDevContainer(name, config) {
                 }
             },
             "codespaces": {
-                "openFiles": config.files || []
+                // Auto-fix paths for openFiles
+                "openFiles": (config.files || []).map(f => {
+                    if (f !== "README.md" && !f.startsWith("project/")) return `project/${f}`;
+                    return f;
+                })
             }
         },
-        
-        "portsAttributes": portsAttributes,
-        
+        "portsAttributes": portsAttributes
     };
 
-    // -- Terminal Panel Logic --
-    // If 'terminal' is requested, we don't need extra JSON config; 
-    // VS Code opens a terminal by default. 
-    // However, we can use tasks.json if specific split panes are needed.
-
-    fs.writeFileSync(
-        path.join(devContainerDir, 'devcontainer.json'), 
-        JSON.stringify(devContainerConfig, null, 4)
-    );
-    console.log(`✅ Generated devcontainer configuration in.devcontainer/${name}`);
+    fs.writeFileSync(path.join(devContainerDir, 'devcontainer.json'), JSON.stringify(devContainerConfig, null, 4));
+    console.log(`✅ Generated devcontainer configuration in .devcontainer/${name}`);
 }
+
+// async function generateDevContainer(name, config) {
+//     const devContainerDir = path.join(DEVCONTAINER_BASE, name);
+//     fs.ensureDirSync(devContainerDir);
+
+//     // Calculate where the tutorial files actually live
+//     const targetDir = path.join(TUTORIALS_BASE, name);
+
+//     // --- SMART STARTUP LOGIC ---
+//     // Check if setup-tutorial.js exists and has content
+//     let postAttachCommand = "npm start";
+//     const setupFile = path.join(targetDir, "setup-tutorial.js");
+
+//     if (fs.existsSync(setupFile)) {
+//         const content = fs.readFileSync(setupFile, 'utf8').trim();
+//         // If file exists and is not empty, assume manual setup is required.
+//         // We set command to empty string so user enters terminal manually.
+//         if (content.length > 0) {
+//             console.log("ℹ️  Setup script detected. Disabling auto-start.");
+//             postAttachCommand = ""; 
+//         }
+//     }
+
+//     // -- Port & Preview Configuration --
+//     // Port 1234: The Starlight Tutorial Steps
+//     const portsAttributes = {
+//         "1234": {
+//             "label": "Tutorial Guide",
+//             "onAutoForward": "openPreview"
+//         }
+//     };
+
+//     // Port 8080: The User's Live Preview (if 'browser' panel requested)
+//     if (config.panels && config.panels.includes('browser')) {
+//         portsAttributes["8080"] = {
+//             "label": "My Project Preview",
+//             "onAutoForward": "notify",
+//             "visibility": "public"
+//         };
+//     }
+
+//     // --- SMART FILE EXCLUSION LOGIC ---
+//     // 1. List of files we generally want to hide in a tutorial
+//     const defaultHidden = [
+//         ".astro",
+//         "public",
+//         "node_modules",
+//         "vonage-toolbar",
+//         "src",
+//         "dist",
+//         "steps",            // Hides the static site folder
+//         ".devcontainer",    // Hides the config folder
+//         ".vscode",
+//         "package.json",
+//         "package-lock.json",
+//         "tutorial-config.json",
+//         "setup-tutorial.js",
+//         "tsconfig.json",
+//         "astro.config.mjs",
+//         ".git",
+//         "README.md",
+//         "markdoc.config.mjs",
+//         ".DS_Store"
+//     ];
+
+//     // 2. Build the files.exclude object
+//     const filesExclude = {};
+//     const userFiles = config.files || [];
+
+//     defaultHidden.forEach(file => {
+//         // Only hide the file if the user didn't explicitly ask for it in the config
+//         if (!userFiles.includes(file)) {
+//             filesExclude[file] = true;
+//         }
+//     });
+//     // ----------------------------------------
+    
+//     // -- Startup Commands --
+//     // 1. Serve the 'steps' folder (static site) on port 3000
+//     // 2. Serve the current directory on port 8080 (if browser requested)
+//     // We use 'concurrently' or simple background '&' operators.
+    
+//     // let attachCommand = "nohup npx http-server steps -p 3000 --cors -c-1 > /dev/null 2>&1 &";
+    
+//     // if (config.panels && config.panels.includes('browser')) {
+//     //     // live-server provides hot reload for the user's index.html
+//     //     attachCommand += " nohup npx live-server --port=8080 --no-browser > /dev/null 2>&1 &";
+//     // }
+
+//     // -- The DevContainer Configuration Object --
+//     const devContainerConfig = {
+//         "name": `Tutorial: ${name}`,
+//         "image": "mcr.microsoft.com/devcontainers/javascript-node:1-22-bookworm",
+        
+//         // Isolate the user in the specific tutorial folder
+//         "workspaceFolder": `/workspaces/${REPO_NAME}/tutorials/${name}`,
+
+//         "waitFor": "onCreateCommand",
+
+//         "updateContentCommand": "npm install",
+
+//         // Run once when the container is created
+//         "postCreateCommand": "",
+        
+//         // Run every time the user connects/attaches
+//         "postAttachCommand": postAttachCommand,
+
+//         "features": {
+//             "ghcr.io/devcontainers/features/github-cli:1": {}
+//         },
+        
+//         "customizations": {
+//             "vscode": {
+//                 "extensions": [],
+//                 "settings": {
+//                     "editor.formatOnSave": true,
+//                     "files.exclude": filesExclude
+//                 }
+//             },
+//             "codespaces": {
+//                 "openFiles": config.files || []
+//             }
+//         },
+        
+//         "portsAttributes": portsAttributes,
+        
+//     };
+
+//     // -- Terminal Panel Logic --
+//     // If 'terminal' is requested, we don't need extra JSON config; 
+//     // VS Code opens a terminal by default. 
+//     // However, we can use tasks.json if specific split panes are needed.
+
+//     fs.writeFileSync(
+//         path.join(devContainerDir, 'devcontainer.json'), 
+//         JSON.stringify(devContainerConfig, null, 4)
+//     );
+//     console.log(`✅ Generated devcontainer configuration in.devcontainer/${name}`);
+// }
 
 main().catch(err => {
     console.error(err);

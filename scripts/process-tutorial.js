@@ -45,7 +45,7 @@ async function main() {
         // If not, check if there is a single subdirectory containing it
         const subdirs = fs.readdirSync(targetDir).filter(f => fs.statSync(path.join(targetDir, f)).isDirectory());
         if (subdirs.length === 1) {
-            const nestedDir = path.join(targetDir, subdirs);
+            const nestedDir = path.join(targetDir, subdirs[0]);
             if (fs.existsSync(path.join(nestedDir, configName))) {
                 console.log(`ℹ️  Found nested root in '${subdirs[0]}'. Flattening structure...`);
                 // Move contents up to targetDir
@@ -54,19 +54,22 @@ async function main() {
             }
             // console.log(`ℹ️  Found project in subdirectory: ${subdirs}`);
         }
-    } else if (!fs.existsSync(path.join(projectRoot, 'package.json'))) {
+    } 
+    // else if (!fs.existsSync(path.join(projectRoot, 'package.json'))) {
+    //     console.error("❌ Error: package.json not found. Is this a valid Node.js project?");
+    //     // Exit with error to fail the GitHub Action
+    //     process.exit(1);
+    // }
+
+
+    // Explicit Check
+    if (!fs.existsSync(path.join(projectRoot, 'package.json'))) {
         console.error("❌ Error: package.json not found. Is this a valid Node.js project?");
         // Exit with error to fail the GitHub Action
         process.exit(1);
     }
 
-
-    // Explicit Check
-    // if (!fs.existsSync(path.join(projectRoot, 'package.json'))) {
-    //     console.error("❌ Error: package.json not found. Is this a valid Node.js project?");
-    //     // Exit with error to fail the GitHub Action
-    //     process.exit(1);
-    // }
+    
     // 3. Load Tutorial Configuration
     const configPath = path.join(targetDir, 'tutorial-config.json');
     if (!fs.existsSync(configPath)) {

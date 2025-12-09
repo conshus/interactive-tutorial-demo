@@ -393,7 +393,8 @@ async function generateDevContainer(name, config, hasExternalApp, hasSetupScript
     // 2. Setup Script (Interactive)
     if (hasSetupScript) {
         // We echo a blank line to separate output from the prompt
-        commandChain += "echo '' && cd project && node setup-project.js && ";
+        // commandChain += "echo '' && cd project && node setup-project.js && ";
+        commandChain += "echo '' && cd project && gh codespace ports visibility 3000:public -c $CODESPACE_NAME && node setup-project.js && ";
     } else if (hasExternalApp) {
         // If no setup script but we need to run app, we still need to cd
         commandChain += "cd project && ";
@@ -441,6 +442,9 @@ async function generateDevContainer(name, config, hasExternalApp, hasSetupScript
         "astro.config.mjs",
         ".git",
         ".DS_Store",
+        "__MACOSX",
+        "README.md",
+        "markdoc.config.mjs",
         "project/setup-project.js" // Hide the moved setup script
     ];
 

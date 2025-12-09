@@ -54,14 +54,19 @@ async function main() {
             }
             // console.log(`ℹ️  Found project in subdirectory: ${subdirs}`);
         }
-    }
-
-    // Explicit Check
-    if (!fs.existsSync(path.join(projectRoot, 'package.json'))) {
+    } else if (!fs.existsSync(path.join(projectRoot, 'package.json'))) {
         console.error("❌ Error: package.json not found. Is this a valid Node.js project?");
         // Exit with error to fail the GitHub Action
         process.exit(1);
     }
+
+
+    // Explicit Check
+    // if (!fs.existsSync(path.join(projectRoot, 'package.json'))) {
+    //     console.error("❌ Error: package.json not found. Is this a valid Node.js project?");
+    //     // Exit with error to fail the GitHub Action
+    //     process.exit(1);
+    // }
     // 3. Load Tutorial Configuration
     const configPath = path.join(targetDir, 'tutorial-config.json');
     if (!fs.existsSync(configPath)) {

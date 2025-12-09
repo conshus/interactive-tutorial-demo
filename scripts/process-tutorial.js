@@ -41,6 +41,7 @@ async function main() {
     
     // Check if package.json exists at extraction root
     if (!fs.existsSync(path.join(projectRoot, 'package.json'))) {
+        console.log("ℹ️  package.json not found at root. Checking for nested directory...");
         // If not, check if there is a single subdirectory containing it
         const subdirs = fs.readdirSync(targetDir).filter(f => fs.statSync(path.join(targetDir, f)).isDirectory());
         if (subdirs.length === 1) {

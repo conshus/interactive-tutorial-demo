@@ -44,8 +44,14 @@ async function main() {
         // If not, check if there is a single subdirectory containing it
         const subdirs = fs.readdirSync(targetDir).filter(f => fs.statSync(path.join(targetDir, f)).isDirectory());
         if (subdirs.length === 1) {
-            projectRoot = path.join(targetDir, subdirs);
-            console.log(`ℹ️  Found project in subdirectory: ${subdirs}`);
+            const nestedDir = path.join(targetDir, subdirs);
+            if (fs.existsSync(path.join(nestedDir, configName))) {
+                console.log(`ℹ️  Found nested root in '${subdirs[0]}'. Flattening structure...`);
+                // Move contents up to targetDir
+                fs.copySync(nestedDir, targetDir);
+                fs.removeSync(nestedDir);
+            }
+            // console.log(`ℹ️  Found project in subdirectory: ${subdirs}`);
         }
     }
 
@@ -136,7 +142,7 @@ async function main() {
         pkg.scripts = pkg.scripts || {};
         
         // 1. The Tutorial Server Script (Runs in background)
-        pkg.scripts["start:tutorial"] = "http-server steps -p 3000 --cors -c-1";
+        pkg.scripts["start:tutorial"] = "http-server steps -p 1234 --cors -c-1";
         
         // 2. The Post-Install Script (Installs project deps)
         if (hasExternalApp) {
@@ -397,7 +403,7 @@ async function generateDevContainer(name, config, hasExternalApp, hasSetupScript
     }
 
     const portsAttributes = {
-        "3000": { "label": "Tutorial Guide", "onAutoForward": "openPreview" }
+        "1234": { "label": "Tutorial Guide", "onAutoForward": "openPreview" }
     };
 
     if (config.panels && config.panels.includes('browser')) {

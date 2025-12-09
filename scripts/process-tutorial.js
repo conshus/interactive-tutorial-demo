@@ -43,8 +43,11 @@ async function main() {
     if (!fs.existsSync(path.join(projectRoot, 'package.json'))) {
         console.log("ℹ️  package.json not found at root. Checking for nested directory...");
         // If not, check if there is a single subdirectory containing it
-        const subdirs = fs.readdirSync(targetDir).filter(f => fs.statSync(path.join(targetDir, f)).isDirectory());
-        console.log('subdirs.length: ',subdirs.length);
+        let subdirs = fs.readdirSync(targetDir).filter(f => fs.statSync(path.join(targetDir, f)).isDirectory());
+        console.log('subdirs.length before: ',subdirs.length);
+        // FIX: Ignore the __MACOSX folder if it exists
+        subdirs = subdirs.filter(dir => dir !== '__MACOSX');
+        console.log('subdirs.length after: ',subdirs.length);
         if (subdirs.length === 1) {
             const nestedDir = path.join(targetDir, subdirs[0]);
             if (fs.existsSync(path.join(nestedDir, 'package.json'))) {

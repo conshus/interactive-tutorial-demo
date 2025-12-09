@@ -44,9 +44,10 @@ async function main() {
         console.log("ℹ️  package.json not found at root. Checking for nested directory...");
         // If not, check if there is a single subdirectory containing it
         const subdirs = fs.readdirSync(targetDir).filter(f => fs.statSync(path.join(targetDir, f)).isDirectory());
+        console.log('subdirs.length: ',subdirs.length);
         if (subdirs.length === 1) {
             const nestedDir = path.join(targetDir, subdirs[0]);
-            if (fs.existsSync(path.join(nestedDir, configName))) {
+            if (fs.existsSync(path.join(nestedDir, 'package.json'))) {
                 console.log(`ℹ️  Found nested root in '${subdirs[0]}'. Flattening structure...`);
                 // Move contents up to targetDir
                 fs.copySync(nestedDir, targetDir);
@@ -69,7 +70,7 @@ async function main() {
         process.exit(1);
     }
 
-    
+
     // 3. Load Tutorial Configuration
     const configPath = path.join(targetDir, 'tutorial-config.json');
     if (!fs.existsSync(configPath)) {

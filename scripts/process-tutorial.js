@@ -420,12 +420,15 @@ async function generateDevContainer(name, config, hasExternalApp, hasSetupScript
         "1234": { "label": "Tutorial Guide", "onAutoForward": "openPreview" }
     };
 
+    const forwardPortsList = ["1234"];
+
     if (config.panels && config.panels.includes('browser')) {
         portsAttributes["8080"] = {
             "label": "My Project Preview",
             "onAutoForward": "notify",
             "visibility": "public"
         };
+        forwardPortsList.push("8080");
     }
 
     if (hasExternalApp) {
@@ -434,6 +437,7 @@ async function generateDevContainer(name, config, hasExternalApp, hasSetupScript
             "onAutoForward": "notify",
             "visibility": "public"
         };
+        forwardPortsList.push("3000");
     }
 
 
@@ -478,6 +482,8 @@ async function generateDevContainer(name, config, hasExternalApp, hasSetupScript
         
         // THE MAGIC CHAIN
         "postAttachCommand": commandChain, 
+
+        "forwardPorts": forwardPortsList,
 
         "features": {
              "ghcr.io/devcontainers/features/github-cli:1": {}

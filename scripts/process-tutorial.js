@@ -388,7 +388,11 @@ async function generateDevContainer(name, config, hasExternalApp, hasSetupScript
     // --- CONSTRUCT THE DAISY CHAIN COMMAND ---
     // 1. Start Tutorial Server (Backgrounded & Silenced)
     // We run this from root because 'steps' is in root.
-    let commandChain = "nohup npm run start:tutorial > /dev/null 2>&1 & ";
+    // let commandChain = "nohup npm run start:tutorial > /dev/null 2>&1 & ";
+
+    // We use npx (or direct path) to run http-server directly, bypassing package.json scripts
+    // This guarantees we serve the static 'steps' folder and never trigger 'astro dev'
+    let commandChain = "nohup ./node_modules/.bin/http-server steps -p 1234 --cors -c-1 > /dev/null 2>&1 & ";
 
     // // 2. Setup Script (Interactive)
     // if (hasSetupScript) {
@@ -435,7 +439,7 @@ async function generateDevContainer(name, config, hasExternalApp, hasSetupScript
              // We can also print the link for the frontend fallback if you like
              const urlMsg = `\\n\\n🚀 PREVIEW READY:\\nhttps://\${CODESPACE_NAME}-8080.app.github.dev\\n\\n`;
              commandChain += `nohup sh -c "sleep 4 && echo '${urlMsg}'" > /dev/null 2>&1 & `;
-             
+
              commandChain += "live-server --port=8080 --no-browser > /dev/null 2>&1 & wait";
         }
     } else {

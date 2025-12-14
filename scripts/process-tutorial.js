@@ -390,15 +390,23 @@ async function generateDevContainer(name, config, hasExternalApp, hasSetupScript
     // We run this from root because 'steps' is in root.
     let commandChain = "nohup npm run start:tutorial > /dev/null 2>&1 & ";
 
-    // 2. Setup Script (Interactive)
+    // // 2. Setup Script (Interactive)
+    // if (hasSetupScript) {
+    //     // We echo a blank line to separate output from the prompt
+    //     // commandChain += "echo '' && cd project && node setup-project.js && ";
+    //     commandChain += "echo '' && cd project && gh codespace ports visibility 3000:public -c $CODESPACE_NAME && node setup-project.js && ";
+    // } else if (hasExternalApp) {
+    //     // If no setup script but we need to run app, we still need to cd
+    //     commandChain += "cd project && ";
+    // }
+
+    // 2. Prepare the directory
     if (hasSetupScript) {
-        // We echo a blank line to separate output from the prompt
-        // commandChain += "echo '' && cd project && node setup-project.js && ";
-        commandChain += "echo '' && cd project && gh codespace ports visibility 3000:public -c $CODESPACE_NAME && node setup-project.js && ";
+        commandChain += "echo '' && cd project && node setup-project.js && ";
     } else if (hasExternalApp) {
-        // If no setup script but we need to run app, we still need to cd
         commandChain += "cd project && ";
     }
+
 
     // 3. Start Application
     if (hasExternalApp) {
@@ -408,13 +416,26 @@ async function generateDevContainer(name, config, hasExternalApp, hasSetupScript
         const urlMsg = `\\n\\n🚀 APPLICATION READY:\\nhttps://\${CODESPACE_NAME}-3000.app.github.dev\\n\\n`;
         commandChain += `nohup sh -c "sleep 4 && echo '${urlMsg}'" > /dev/null 2>&1 & `;
 
-        // Run the project's start script
+        // --- RESTORED: Your working 'gh' fix for visibility ---
+        // You mentioned this was the only way it worked, so we keep it!
+        const visibilityCmd = "gh codespace ports visibility 3000:public -c $CODESPACE_NAME";
+        commandChain += `nohup sh -c "sleep 5 && ${visibilityCmd}" > /dev/null 2>&1 & `;
+
+        // Run the project's start script (This blocks the terminal)
         commandChain += "npm start";
     } else if (config.panels && config.panels.includes('browser')) {
         // Fallback: If no external app but browser requested, run live-server (from root)
         // Note: We need to be careful with 'cd' above. 
         // If we didn't cd into project, we run this from root.
         if (!hasSetupScript) {
+
+            const visibilityCmd = "gh codespace ports visibility 8080:public -c $CODESPACE_NAME";
+             commandChain += `nohup sh -c "sleep 5 && ${visibilityCmd}" > /dev/null 2>&1 & `;
+             
+             // We can also print the link for the frontend fallback if you like
+             const urlMsg = `\\n\\n🚀 PREVIEW READY:\\nhttps://\${CODESPACE_NAME}-8080.app.github.dev\\n\\n`;
+             commandChain += `nohup sh -c "sleep 4 && echo '${urlMsg}'" > /dev/null 2>&1 & `;
+             
              commandChain += "live-server --port=8080 --no-browser > /dev/null 2>&1 & wait";
         }
     } else {

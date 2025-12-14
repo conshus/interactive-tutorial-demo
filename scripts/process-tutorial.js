@@ -405,8 +405,8 @@ async function generateDevContainer(name, config, hasExternalApp, hasSetupScript
         // --- Print the URL in the terminal after server starts ---
         // We use $CODESPACE_NAME to build the standard GitHub Codespaces URL.
         // We sleep for 4 seconds so this message appears AFTER the server startup logs.
-        // const urlMsg = `\\n\\n🚀 APPLICATION READY:\\nhttps://\${CODESPACE_NAME}-3000.app.github.dev\\n\\n`;
-        // commandChain += `nohup sh -c "sleep 4 && echo '${urlMsg}'" > /dev/null 2>&1 & `;
+        const urlMsg = `\\n\\n🚀 APPLICATION READY:\\nhttps://\${CODESPACE_NAME}-3000.app.github.dev\\n\\n`;
+        commandChain += `nohup sh -c "sleep 4 && echo '${urlMsg}'" > /dev/null 2>&1 & `;
 
         // Run the project's start script
         commandChain += "npm start";

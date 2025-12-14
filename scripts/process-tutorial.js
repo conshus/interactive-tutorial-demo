@@ -418,12 +418,14 @@ async function generateDevContainer(name, config, hasExternalApp, hasSetupScript
         // We use $CODESPACE_NAME to build the standard GitHub Codespaces URL.
         // We sleep for 4 seconds so this message appears AFTER the server startup logs.
         const urlMsg = `\\n\\n🚀 APPLICATION READY:\\nhttps://\${CODESPACE_NAME}-3000.app.github.dev\\n\\n`;
-        commandChain += `nohup sh -c "sleep 4 && echo '${urlMsg}'" > /dev/null 2>&1 & `;
+        // commandChain += `nohup sh -c "sleep 4 && echo '${urlMsg}'" > /dev/null 2>&1 & `;
+        commandChain += `(nohup sh -c "sleep 4 && echo '${urlMsg}'" > /dev/null 2>&1 &) && `;
 
         // --- RESTORED: Your working 'gh' fix for visibility ---
         // You mentioned this was the only way it worked, so we keep it!
         const visibilityCmd = "gh codespace ports visibility 3000:public -c $CODESPACE_NAME";
-        commandChain += `nohup sh -c "sleep 5 && ${visibilityCmd}" > /dev/null 2>&1 & `;
+        // commandChain += `nohup sh -c "sleep 5 && ${visibilityCmd}" > /dev/null 2>&1 & `;
+        commandChain += `(nohup sh -c "sleep 5 && ${visibilityCmd}" > /dev/null 2>&1 &) && `;
 
         // Run the project's start script (This blocks the terminal)
         commandChain += "npm start";
@@ -434,11 +436,11 @@ async function generateDevContainer(name, config, hasExternalApp, hasSetupScript
         if (!hasSetupScript) {
 
             const visibilityCmd = "gh codespace ports visibility 8080:public -c $CODESPACE_NAME";
-             commandChain += `nohup sh -c "sleep 5 && ${visibilityCmd}" > /dev/null 2>&1 & `;
+             commandChain += `(nohup sh -c "sleep 5 && ${visibilityCmd}" > /dev/null 2>&1 &) && `;
              
              // We can also print the link for the frontend fallback if you like
              const urlMsg = `\\n\\n🚀 PREVIEW READY:\\nhttps://\${CODESPACE_NAME}-8080.app.github.dev\\n\\n`;
-             commandChain += `nohup sh -c "sleep 4 && echo '${urlMsg}'" > /dev/null 2>&1 & `;
+             commandChain += `(nohup sh -c "sleep 4 && echo '${urlMsg}'" > /dev/null 2>&1 &) && `;
 
              commandChain += "live-server --port=8080 --no-browser > /dev/null 2>&1 & wait";
         }

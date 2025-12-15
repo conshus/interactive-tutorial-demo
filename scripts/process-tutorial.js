@@ -129,15 +129,36 @@ async function main() {
     const destSetup = path.join(projectDir, 'setup-project.js');
     let hasSetupScript = false;
 
+    // Helper to check and move
+    const processSetupFile = (srcPath) => {
+        const content = fs.readFileSync(srcPath, 'utf8').trim();
+        if (content.length > 0) {
+            fs.moveSync(srcPath, destSetup, { overwrite: true });
+            console.log("📦 Found active setup script -> project/setup-project.js");
+            return true;
+        } else {
+            // If empty, just remove it so it doesn't clutter
+            fs.removeSync(srcPath);
+            console.log("ℹ️  Setup script is empty. Skipping setup steps.");
+            return false;
+        }
+    };
+
     if (fs.existsSync(legacySetup)) {
-        fs.moveSync(legacySetup, destSetup, { overwrite: true });
-        hasSetupScript = true;
-        console.log("📦 Moved setup-tutorial.js -> project/setup-project.js");
+        hasSetupScript = processSetupFile(legacySetup);
     } else if (fs.existsSync(newSetup)) {
-        fs.moveSync(newSetup, destSetup, { overwrite: true });
-        hasSetupScript = true;
-        console.log("📦 Moved setup-project.js -> project/setup-project.js");
+        hasSetupScript = processSetupFile(newSetup);
     }
+
+    // if (fs.existsSync(legacySetup)) {
+    //     fs.moveSync(legacySetup, destSetup, { overwrite: true });
+    //     hasSetupScript = true;
+    //     console.log("📦 Moved setup-tutorial.js -> project/setup-project.js");
+    // } else if (fs.existsSync(newSetup)) {
+    //     fs.moveSync(newSetup, destSetup, { overwrite: true });
+    //     hasSetupScript = true;
+    //     console.log("📦 Moved setup-project.js -> project/setup-project.js");
+    // }
 
     // --- CONFIGURE ROOT PACKAGE.JSON ---
     const rootPackageJson = path.join(targetDir, 'package.json');

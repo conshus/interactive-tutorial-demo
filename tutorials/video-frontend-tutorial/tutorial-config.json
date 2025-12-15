@@ -1,0 +1,14 @@
+{
+  "files": [
+    "index.html",
+    "app.js",
+    "app.css",
+    "config.js"
+  ],
+  "panels": [
+    "browser"
+  ],
+  "repository": "",
+  "capabilities": [],
+  "version": "0.0.1"
+}

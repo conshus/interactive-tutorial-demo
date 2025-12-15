@@ -463,7 +463,7 @@ async function generateDevContainer(name, config, hasExternalApp, hasSetupScript
              // We can also print the link for the frontend fallback if you like
              const urlMsg = `\\n\\n🚀 PREVIEW READY:\\nhttps://\${CODESPACE_NAME}-8080.app.github.dev\\n\\n`;
             //  commandChain += `(nohup sh -c "sleep 4 && echo '${urlMsg}'" > /dev/null 2>&1 &) && `;
-             commandChain += `(sleep 4 && echo -e '${urlMsg}" &) && `;
+             commandChain += `(sleep 4 && echo -e "${urlMsg}" &) && `;
 
              commandChain += "live-server --port=8080 --no-browser > /dev/null 2>&1 & wait";
         }

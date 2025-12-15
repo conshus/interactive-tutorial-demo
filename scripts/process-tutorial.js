@@ -465,7 +465,8 @@ async function generateDevContainer(name, config, hasExternalApp, hasSetupScript
             //  commandChain += `(nohup sh -c "sleep 4 && echo '${urlMsg}'" > /dev/null 2>&1 &) && `;
              commandChain += `(sleep 4 && echo -e "${urlMsg}" &) && `;
 
-             commandChain += "live-server --port=8080 --no-browser > /dev/null 2>&1 & wait";
+            //  commandChain += "live-server --port=8080 --no-browser > /dev/null 2>&1 & wait";
+             commandChain += "./node_modules/.bin/live-server --port=8080 --no-browser > /dev/null 2>&1 & wait";
         }
     } else {
         // If nothing else to run, just wait to keep container alive
@@ -556,7 +557,9 @@ async function generateDevContainer(name, config, hasExternalApp, hasSetupScript
             "codespaces": {
                 // Auto-fix paths for openFiles
                 "openFiles": (config.files || []).map(f => {
-                    if (f !== "README.md" && !f.startsWith("project/")) return `project/${f}`;
+                    if ((hasExternalApp || hasSetupScript) && f !== "README.md" && !f.startsWith("project/")) {
+                        return `project/${f}`;
+                    }
                     return f;
                 })
             }

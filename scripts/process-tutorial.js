@@ -272,7 +272,10 @@ async function main() {
         tutorialConfig.files.forEach(fileName => {
             const filePath = path.join(targetDir, fileName);
             if (!fs.existsSync(filePath)) {
-                fs.writeFileSync(filePath, `\n`);
+                // fs.outputFileSync automatically creates directories if the filename includes them (e.g. "css/style.css")
+                // If the filename is just "index.html", it simply creates it in the root.
+                fs.outputFileSync(filePath, `\n`);
+                // fs.writeFileSync(filePath, `\n`);
                 console.log(`📄 Created placeholder: ${fileName}`);
             }
         });
@@ -528,6 +531,18 @@ async function generateDevContainer(name, config, hasExternalApp, hasSetupScript
         }
     });
 
+    // --- CONSTRUCT OPEN FILES LIST ---
+    // 1. Get 'files' (The ones we created/touched)
+    const filesToCreate = config.files || [];
+    
+    // 2. Get 'openFiles' (The ones existing in the repo we just want to open)
+    const filesToOpen = config.openFiles || [];
+    
+    // 3. Merge them and remove duplicates
+    // We do NOT add logic to prepend 'project/'. We trust the config is explicit.
+    const uniqueFiles = [...new Set([...filesToCreate, ...filesToOpen])];
+
+
     const devContainerConfig = {
         "name": `Tutorial: ${name}`,
         "image": "mcr.microsoft.com/devcontainers/javascript-node:1-22-bookworm",
@@ -556,12 +571,13 @@ async function generateDevContainer(name, config, hasExternalApp, hasSetupScript
             },
             "codespaces": {
                 // Auto-fix paths for openFiles
-                "openFiles": (config.files || []).map(f => {
-                    if ((hasExternalApp || hasSetupScript) && f !== "README.md" && !f.startsWith("project/")) {
-                        return `project/${f}`;
-                    }
-                    return f;
-                })
+                // "openFiles": (config.files || []).map(f => {
+                //     if ((hasExternalApp || hasSetupScript) && f !== "README.md" && !f.startsWith("project/")) {
+                //         return `project/${f}`;
+                //     }
+                //     return f;
+                // })
+                "openFiles": uniqueFiles.filter(f => f !== "README.md")
             }
         },
         "portsAttributes": portsAttributes

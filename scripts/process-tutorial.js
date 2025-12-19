@@ -271,13 +271,13 @@ async function main() {
     if (tutorialConfig.files && Array.isArray(tutorialConfig.files)) {
         tutorialConfig.files.forEach(fileName => {
             const filePath = path.join(targetDir, fileName);
-            if (!fs.existsSync(filePath)) {
+            // if (!fs.existsSync(filePath)) {
                 // fs.outputFileSync automatically creates directories if the filename includes them (e.g. "css/style.css")
                 // If the filename is just "index.html", it simply creates it in the root.
                 fs.outputFileSync(filePath, `\n`);
                 // fs.writeFileSync(filePath, `\n`);
                 console.log(`📄 Created placeholder: ${fileName}`);
-            }
+            // }
         });
     }
 
